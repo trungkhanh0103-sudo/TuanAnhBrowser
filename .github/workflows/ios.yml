@@ -1,0 +1,63 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'TuanAnhBrowser-iOS.zip'
+      - '.github/workflows/ios.yml'
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        run: |
+          mkdir -p source
+          unzip -q TuanAnhBrowser-iOS.zip -d source
+
+      - name: Find Xcode project
+        id: project
+        run: |
+          PROJECT=$(find source -name "*.xcodeproj" -print -quit)
+          echo "project=$PROJECT" >> $GITHUB_OUTPUT
+
+      - name: Detect scheme
+        id: scheme
+        run: |
+          xcodebuild -list -json \
+            -project "${{ steps.project.outputs.project }}" \
+            > project.json
+          SCHEME=$(python3 -c \
+            "import json; d=json.load(open('project.json')); print(d['project']['schemes'][0])")
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+
+      - name: Build iOS
+        run: |
+          xcodebuild \
+            -project "${{ steps.project.outputs.project }}" \
+            -scheme "${{ steps.scheme.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos \
+            -maxdepth 1 -name "*.app" -print -quit)
+
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry TuanAnhBrowser.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: TuanAnhBrowser-IPA
+          path: TuanAnhBrowser.ipa
