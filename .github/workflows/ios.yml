@@ -7,6 +7,9 @@ on:
       - 'TuanAnhBrowser-iOS.zip'
       - '.github/workflows/ios.yml'
 
+env:
+  DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
+
 jobs:
   build:
     runs-on: macos-latest
@@ -18,9 +21,7 @@ jobs:
       - name: Prepare & Extract ZIP
         run: |
           mkdir -p source
-          # Cách này xử lý được cả ZIP từ Windows
-          ditto -ck --sequesterRsrc --zip TuanAnhBrowser-iOS.zip source/ || \
-            unzip -o -q TuanAnhBrowser-iOS.zip -d source/
+          unzip -q -o TuanAnhBrowser-iOS.zip -d source/
           echo "✅ Giải nén xong!"
 
       - name: Find Xcode project
@@ -28,19 +29,17 @@ jobs:
         run: |
           PROJECT=$(find source -name "*.xcodeproj" -maxdepth 3 | head -1)
           if [ -z "$PROJECT" ]; then
-            echo "❌ Không tìm thấy file .xcodeproj trong thư mục!"
+            echo "❌ Không tìm thấy file .xcodeproj!"
             exit 1
           fi
           echo "project=$PROJECT" >> $GITHUB_OUTPUT
-          echo "✅ Tìm thấy project: $PROJECT"
+          echo "✅ Tìm thấy project"
 
       - name: Detect scheme
         id: detect-scheme
         run: |
           PROJECT_NAME=$(basename "${{ steps.find-project.outputs.project }}" .xcodeproj)
-          SCHEME="$PROJECT_NAME"
-          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
-          echo "✅ Sử dụng scheme: $SCHEME"
+          echo "scheme=$PROJECT_NAME" >> $GITHUB_OUTPUT
 
       - name: Build iOS
         run: |
