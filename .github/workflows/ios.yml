@@ -15,49 +15,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract ZIP
+      - name: Prepare & Extract ZIP
         run: |
           mkdir -p source
-          unzip -q TuanAnhBrowser-iOS.zip -d source
+          # Cách này xử lý được cả ZIP từ Windows
+          ditto -ck --sequesterRsrc --zip TuanAnhBrowser-iOS.zip source/ || \
+            unzip -o -q TuanAnhBrowser-iOS.zip -d source/
+          echo "✅ Giải nén xong!"
 
       - name: Find Xcode project
-        id: project
+        id: find-project
         run: |
-          PROJECT=$(find source -name "*.xcodeproj" -print -quit)
+          PROJECT=$(find source -name "*.xcodeproj" -maxdepth 3 | head -1)
+          if [ -z "$PROJECT" ]; then
+            echo "❌ Không tìm thấy file .xcodeproj trong thư mục!"
+            exit 1
+          fi
           echo "project=$PROJECT" >> $GITHUB_OUTPUT
+          echo "✅ Tìm thấy project: $PROJECT"
 
       - name: Detect scheme
-        id: scheme
+        id: detect-scheme
         run: |
-          xcodebuild -list -json \
-            -project "${{ steps.project.outputs.project }}" \
-            > project.json
-          SCHEME=$(python3 -c \
-            "import json; d=json.load(open('project.json')); print(d['project']['schemes'][0])")
+          PROJECT_NAME=$(basename "${{ steps.find-project.outputs.project }}" .xcodeproj)
+          SCHEME="$PROJECT_NAME"
           echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+          echo "✅ Sử dụng scheme: $SCHEME"
 
       - name: Build iOS
         run: |
-          xcodebuild \
-            -project "${{ steps.project.outputs.project }}" \
-            -scheme "${{ steps.scheme.outputs.scheme }}" \
+          PROJECT="${{ steps.find-project.outputs.project }}"
+          SCHEME="${{ steps.detect-scheme.outputs.scheme }}"
+          xcodebuild archive \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
             -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+            -archivePath build/archive.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Package IPA
         run: |
-          APP=$(find build/Build/Products/Release-iphoneos \
-            -maxdepth 1 -name "*.app" -print -quit)
-
-          mkdir Payload
-          cp -R "$APP" Payload/
-          zip -qry TuanAnhBrowser.ipa Payload
+          mkdir -p Payload
+          cp -r build/archive.xcarchive/Products/Applications/*.app Payload/
+          zip -qr TuanAnhBrowser.ipa Payload/
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: TuanAnhBrowser-IPA
+          name: TuanAnhBrowser-iPA
           path: TuanAnhBrowser.ipa
