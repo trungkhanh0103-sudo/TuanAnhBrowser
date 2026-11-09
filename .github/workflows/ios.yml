@@ -7,9 +7,6 @@ on:
       - 'TuanAnhBrowser-iOS.zip'
       - '.github/workflows/ios.yml'
 
-env:
-  DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
-
 jobs:
   build:
     runs-on: macos-latest
@@ -52,13 +49,21 @@ jobs:
             -archivePath build/archive.xcarchive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            WARNING_CFLAGS="-Wno-error=deprecated-declarations"
+        continue-on-error: false
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r build/archive.xcarchive/Products/Applications/*.app Payload/
-          zip -qr TuanAnhBrowser.ipa Payload/
+          if ls build/archive.xcarchive/Products/Applications/*.app 1> /dev/null 2>&1; then
+            cp -r build/archive.xcarchive/Products/Applications/*.app Payload/
+            zip -qr TuanAnhBrowser.ipa Payload/
+            echo "✅ Đóng gói IPA thành công"
+          else
+            echo "❌ Không tìm thấy file .app để đóng gói"
+            exit 1
+          fi
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
